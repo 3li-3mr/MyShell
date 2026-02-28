@@ -48,6 +48,7 @@ void setup_environment() {
 void shell() {
     while(1){
         printf("MyShell:%s> ", abs_path);
+        fflush(stdout);
         char* input = read_input();
         char** args = parse_input(input);
         bool foreground;
@@ -104,9 +105,11 @@ int evaluate_expression(char** args, bool* foreground) {
     }
     int i = 0;
     while(args[i] != NULL){
-        if(args[i][0] == '$'){
+        if(args[i][0] == '$' || (args[i][0] == '"' && args[i][1] == '$')){
             char* key = args[i];
             key++;
+            if(key[0] == '$') key++;
+            if(key[strlen(key) - 1] == '"') key[strlen(key) - 1] = '\0';
             bool found = false;
             for(int j = 0; j < var_count; j++){
                 if(strcmp(key, vars[j].key) == 0){
@@ -187,7 +190,19 @@ void execute_shell_builtin(char** args) {
 void execute_command(char** args, bool foreground) {
     pid_t pid = fork();
     if(pid == 0){
-        execvp(args[0], args);
+        char* new_args[64];
+        int i = 0;
+        int j = 0;
+        while(args[i] != NULL){
+            char* token = strtok(args[i], " \n");
+            while(token != NULL){
+                new_args[j++] = token;
+                token = strtok(NULL, " \n");
+            }
+            i++;
+        }
+        new_args[j] = NULL;
+        execvp(new_args[0], new_args);
         perror("error");
         exit(0);
     }
