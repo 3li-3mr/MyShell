@@ -1,0 +1,14 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.o
+
+# Executables (Default and custom)
+*.out
+*.exe
+SimpleShell
+shell
+
+# VS Code specific settings (optional but good practice)
+.vscode/
