@@ -17,6 +17,8 @@ void execute_shell_builtin(char** args);
 void execute_command(char** args, bool foreground);
 
 char abs_path[1024];
+
+// structure to hold env. variables
 struct Map{
     char key[64];
     char value[256];
@@ -25,7 +27,7 @@ struct Map vars[100];
 int var_count = 0;
 
 int main() {
-    signal(SIGCHLD, on_child_exit);
+    signal(SIGCHLD, on_child_exit); // handle zombie processes
     setup_environment();
     shell();
     
@@ -33,12 +35,12 @@ int main() {
 }
 
 void on_child_exit(int sig) {
-    while(waitpid(-1, NULL, WNOHANG) > 0);
+    while(waitpid(-1, NULL, WNOHANG) > 0); // remove zombies from process table
 }
 
-void setup_environment() {
+void setup_environment() { // start the shell in the program directory
     if(getcwd(abs_path, sizeof(abs_path)) != NULL){
-        chdir(abs_path);
+        chdir(abs_path); 
     }
     else{
         perror("error");
@@ -54,6 +56,11 @@ void shell() {
         bool foreground;
         int type = evaluate_expression(args, &foreground);
         if(type == 1){
+            if (strcmp(args[0], "exit") == 0) {
+                free(input);
+                free(args);
+                exit(0);
+            }
             execute_shell_builtin(args);
         }
         else if(type == 2){
@@ -78,7 +85,7 @@ char** parse_input(char* input) {
     char** args = malloc(64 * sizeof(char*));
     int i = 0;
     char* token = strtok(input, " \n");
-    if(token != NULL && strcmp(token, "export") == 0){
+    if(token != NULL && strcmp(token, "export") == 0){ // handle export case (extracting vars)
         args[0] = token;
         char* exp = strtok(NULL, "\n");
         if(exp != NULL){
@@ -90,7 +97,7 @@ char** parse_input(char* input) {
         }
         return args;
     }
-    while(token != NULL){
+    while(token != NULL){ // other cases (splitting by spaces)
         args[i] = token;
         i++;
         token = strtok(NULL, " \n");
@@ -105,7 +112,7 @@ int evaluate_expression(char** args, bool* foreground) {
     }
     int i = 0;
     while(args[i] != NULL){
-        if(args[i][0] == '$' || (args[i][0] == '"' && args[i][1] == '$')){
+        if(args[i][0] == '$' || (args[i][0] == '"' && args[i][1] == '$')){ // replace &var with the value of the variable
             char* key = args[i];
             key++;
             if(key[0] == '$') key++;
@@ -130,7 +137,7 @@ int evaluate_expression(char** args, bool* foreground) {
         }
         i++;
     }
-    if(i > 0 && strcmp(args[i-1], "&") == 0){
+    if(i > 0 && strcmp(args[i-1], "&") == 0){ // detect background command
         *foreground = false;
         args[i-1] = NULL;
     }
@@ -146,10 +153,8 @@ int evaluate_expression(char** args, bool* foreground) {
 }
 
 void execute_shell_builtin(char** args) {
-    if(strcmp(args[0], "exit") == 0){
-        exit(0);
-    }
-    else if(strcmp(args[0], "cd") == 0){
+
+    if(strcmp(args[0], "cd") == 0){
         if(args[1] == NULL || strcmp(args[1], "~") == 0){
             chdir(getenv("HOME"));
         }
@@ -160,7 +165,7 @@ void execute_shell_builtin(char** args) {
     }
     else if(strcmp(args[0], "export") == 0){
         if(args[1] != NULL){
-            char* key = strtok(args[1], "=");
+            char* key = strtok(args[1], "="); // split the expression by '=' and saving the variable
             char* value = strtok(NULL, "=");
             if(key != NULL && value != NULL){
                 if(value[0] == '"') value++;
@@ -188,12 +193,12 @@ void execute_shell_builtin(char** args) {
 }
 
 void execute_command(char** args, bool foreground) {
-    pid_t pid = fork();
-    if(pid == 0){
+    pid_t pid = fork(); // generate child process
+    if(pid == 0){ // child
         char* new_args[64];
         int i = 0;
         int j = 0;
-        while(args[i] != NULL){
+        while(args[i] != NULL){ // split each argument into multiple (by spaces) to handle env varibales representing more than 1 argument
             char* token = strtok(args[i], " \n");
             while(token != NULL){
                 new_args[j++] = token;
@@ -206,7 +211,7 @@ void execute_command(char** args, bool foreground) {
         perror("error");
         exit(0);
     }
-    else if(pid > 0 && foreground){
+    else if(pid > 0 && foreground){ // parent (if foreground) to remove the child from process table
         waitpid(pid, NULL, 0);
     }
 }
